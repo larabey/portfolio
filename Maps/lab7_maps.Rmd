@@ -1,0 +1,522 @@
+---
+title: "Data Science Lab 7 : Making Maps"
+author: "Lauren"
+date: "5/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+## Goals of this lab
+
+* Practice creating static and interactive choropleth maps.
+* Practice creating static maps with `ggmap` and interactive maps with `leaflet`.
+
+
+```{r}
+# Load libraries
+library(tidyverse)
+library(ggmap)
+library(leaflet)
+library(RColorBrewer)
+library(tidycensus)
+library(gganimate)
+library(pdxTrees)
+library(here)
+```
+
+
+
+### Problem 1: Mapping PDX Crashes
+
+For this problem we will return to the SE Portland 2018 car crash dataset.
+
+```{r}
+pdx_crash_2018 <- read_csv(here("Maps/pdx_crash_2018_page1.csv"))
+```
+
+
+d. Create a factor variable, `day_time` with categories:
+
+* morning: crashes between 5am and noon
+* afternoon: crashes after noon but before or at 4pm
+* evening: crashes after 4pm but before or at 8pm
+* night: crashes after 8pm but before or at 5am
+
+Add this variable to your interactive map using color.  Make sure to include a legend and be mindful of your color palette choice.
+
+```{r}
+pdx_crash_2018 <- pdx_crash_2018 %>%
+  mutate(CRASH_HR_NO = as.numeric(CRASH_HR_NO),
+         day_time = case_when(
+            CRASH_HR_NO > 5 & CRASH_HR_NO < 12 ~ "morning",
+            CRASH_HR_NO >= 12 & CRASH_HR_NO <= 16 ~ "afternoon",
+            CRASH_HR_NO > 16 & CRASH_HR_NO <= 20 ~ "evening",
+            CRASH_HR_NO > 20 & CRASH_HR_NO <= 23 ~ "night",
+            CRASH_HR_NO <= 5 ~ "night"),
+         day_time = as.factor(day_time),
+         day_time = fct_relevel(day_time, c("morning", "afternoon",
+                                            "evening", "night")))
+
+levels(pdx_crash_2018$day_time)
+
+pal <- colorFactor(palette = "Dark2", 
+                   domain = pdx_crash_2018$day_time)
+
+leaflet(options = leafletOptions(minZoom = 11, maxZoom = 16)) %>% 
+  setView(lng = -122.58, lat = 45.495, zoom = 11.5) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(lng = ~LONGTD_DD, lat = ~LAT_DD, 
+                   data = pdx_crash_2018, radius = 1.5,
+                   opacity = 0.6, group = ~day_time, 
+                   color = ~pal(day_time)) %>%
+  addLegend(position = "bottomright", pal = pal,
+            values = pdx_crash_2018$day_time, opacity = 1,
+            title = "Time of Crash")
+```
+
+
+e. Now add a pop-up to your interactive map that provides additional information (beyond part of the day) about the crash.  
+
+```{r}
+pdx_crash_2018 <- pdx_crash_2018 %>%
+  mutate(severity = case_when(
+           CRASH_SVRTY_CD == 2 ~ "fatal",
+           CRASH_SVRTY_CD == 4 ~ "non-fatal injury",
+           CRASH_SVRTY_CD == 5 ~ "property damage only"),
+         alcohol = as.factor(ALCHL_INVLV_FLG),
+         alcohol = case_when(
+           alcohol == 0 ~ "no",
+           alcohol == 1 ~ "yes"))
+
+content <- paste("Time of day:", pdx_crash_2018$day_time, "</br>",
+                 "Severity:", pdx_crash_2018$severity, "</br>",
+                 "Alcohol involved:", pdx_crash_2018$alcohol)
+
+leaflet(options = leafletOptions(minZoom = 11, maxZoom = 16)) %>% 
+  setView(lng = -122.58, lat = 45.495, zoom = 11.5) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(lng = ~LONGTD_DD, lat = ~LAT_DD, 
+                   data = pdx_crash_2018, radius = 1.5,
+                   opacity = 0.6, group = ~day_time, 
+                   color = ~pal(day_time), popup = content) %>%
+  addLegend(position = "bottomright", pal = pal,
+            values = pdx_crash_2018$day_time, opacity = 1,
+            title = "Time of Crash")
+```
+
+
+f.  Create a leaflet graph where the user can toggle between displaying the different crash severities.
+
+```{r}
+fatal <- pdx_crash_2018 %>%
+  filter(severity == "fatal")
+
+nonfatalinj <- pdx_crash_2018 %>%
+  filter(severity == "non-fatal injury")
+
+propdmgonly <- pdx_crash_2018 %>%
+  filter(severity == "property damage only")
+
+brewer.pal(3, "Dark2")
+
+pal2 <- colorFactor(palette = "Dark2", 
+                    domain = pdx_crash_2018$severity)
+
+leaflet(options = leafletOptions(minZoom = 11, maxZoom = 16)) %>% 
+  setView(lng = -122.58, lat = 45.495, zoom = 11.5) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(lng = ~LONGTD_DD, lat = ~LAT_DD, 
+                   data = fatal, radius = 4.5,
+                   fillOpacity = 0.2, group = "fatal", 
+                   fillColor = "#1B9E77",
+                   stroke = FALSE, popup = content) %>%
+  addCircleMarkers(lng = ~LONGTD_DD, lat = ~LAT_DD, 
+                   data = nonfatalinj, radius = 4.5,
+                   fillOpacity = 0.2, group = "non-fatal injury", 
+                   fillColor = "#D95F02",
+                   stroke = FALSE, popup = content) %>%
+  addCircleMarkers(lng = ~LONGTD_DD, lat = ~LAT_DD, 
+                   data = propdmgonly, radius = 4.5,
+                   fillOpacity = 0.2, group = "property damage only", 
+                   fillColor = "#7570B3",
+                   stroke = FALSE, popup = content) %>%
+  addLegend(position = "bottomright", pal = pal2,
+            values = pdx_crash_2018$severity, opacity = 1,
+            title = "Severity of crash") %>%
+  addLayersControl(overlayGroups = c("fatal", "non-fatal injury",
+                                     "property damage only"),
+                   options = layersControlOptions(collapsed = FALSE),
+                   position = "topright")
+```
+
+
+
+
+### Problem 2: Choropleth Maps
+
+For this problem, I want you to practice creating choropleth maps.  Let's grab some data using `tidycensus`.  You will have to set up an [API key](https://api.census.gov/data/key_signup.html).
+
+```{r}
+api_key <- "01ce758cf0488c54a09a4c14249a4f4d604a6078"
+```
+
+
+a. Let's grab data on the median gross rent (`B25064_001`) from the American Community Survey for Multnomah county, Oregon.  I want you to do data pulls at three geography resolutions: `county subdivision`, `tract`, and `block group`.
+
+```{r}
+options(tigris_use_cache = TRUE)
+
+multsub <- get_acs(geography = "county subdivision",
+                   variables = "B25064_001",
+                   state = "Oregon",
+                   county = "Multnomah",
+                   geometry = TRUE,
+                   key = api_key)
+
+multtract <- get_acs(geography = "tract",
+                     variables = "B25064_001",
+                     state = "Oregon",
+                     county = "Multnomah",
+                     geometry = TRUE,
+                     key = api_key)
+
+multblock <- get_acs(geography = "block group",
+                     variables = "B25064_001",
+                     state = "Oregon",
+                     county = "Multnomah",
+                     geometry = TRUE,
+                     key = api_key)
+```
+
+
+b. Create three choropleth maps of gross rent, one for each geography resolution.
+
+```{r}
+multsub <- multsub %>%
+  mutate(NAME = str_replace_all(NAME, " CCD, Multnomah County, Oregon", ""))
+
+ggplot(data = multsub, mapping = aes(geometry = geometry,
+                                     fill = estimate)) + 
+  geom_sf(color = "white") +
+  coord_sf() +
+  theme_void() +
+  labs(title = "Median Monthly Rent for Multnomah County, OR",
+       subtitle = "by Subdivision",
+       fill = "Estimate ($)", caption = "Source: 5 year ACS 2019") +
+  geom_sf_label(data = multsub, inherit.aes = FALSE,
+                      aes(label = NAME), size = 3) +
+  scale_fill_continuous(high = "#132B43", low = "#56B1F7")
+```
+
+```{r}
+ggplot(data = multtract, mapping = aes(geometry = geometry,
+                                       fill = estimate)) + 
+  geom_sf(color = "white") +
+  coord_sf() +
+  theme_void() +
+  labs(title = "Median Monthly Rent for Multnomah County, OR",
+       subtitle = "by Census Tract",
+       fill = "Estimate ($)", caption = "Source: 5 year ACS 2019") +
+  scale_fill_continuous(high = "#132B43", low = "#56B1F7")
+```
+
+```{r}
+ggplot(data = multblock, mapping = aes(geometry = geometry,
+                                       fill = estimate)) + 
+  geom_sf(color = "white") +
+  coord_sf() +
+  theme_void() +
+  labs(title = "Median Monthly Rent for Multnomah County, OR",
+       subtitle = "by Census Block",
+       fill = "Estimate ($)", caption = "Source: 5 year ACS 2019") +
+  scale_fill_continuous(high = "#132B43", low = "#56B1F7")
+```
+
+
+c. Make one of your maps interactive.  
+
+```{r}
+pal3 <- colorNumeric(palette = "viridis", domain = multtract$estimate,
+                     reverse = TRUE)
+
+popup <- paste(multtract$NAME, "</br>",
+               "Median rent ($):", multtract$estimate, "</br>",
+               "Margin of error ($):", multtract$moe)
+
+multtract %>%
+  leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(color = ~pal3(estimate), stroke = FALSE,
+              fillOpacity = 0.85, popup = popup) %>%
+  addLegend(position = "bottomright", pal = pal3,
+            values = multtract$estimate, opacity = 1,
+            title = "Median rent ($)")
+```
+
+Some lovely code I found [here](https://stackoverflow.com/questions/40276569/reverse-order-in-r-leaflet-continuous-legend) to fix the legend order!
+
+```{r}
+addLegend_decreasing <- function (map, position = c("topright", "bottomright", "bottomleft","topleft"),
+                                  pal, values, na.label = "NA", bins = 7, colors, 
+                                  opacity = 0.5, labels = NULL, labFormat = labelFormat(), 
+                                  title = NULL, className = "info legend", layerId = NULL, 
+                                  group = NULL, data = getMapData(map), decreasing = FALSE) {
+  
+  position <- match.arg(position)
+  type <- "unknown"
+  na.color <- NULL
+  extra <- NULL
+  if (!missing(pal)) {
+    if (!missing(colors)) 
+      stop("You must provide either 'pal' or 'colors' (not both)")
+    if (missing(title) && inherits(values, "formula")) 
+      title <- deparse(values[[2]])
+    values <- evalFormula(values, data)
+    type <- attr(pal, "colorType", exact = TRUE)
+    args <- attr(pal, "colorArgs", exact = TRUE)
+    na.color <- args$na.color
+    if (!is.null(na.color) && col2rgb(na.color, alpha = TRUE)[[4]] == 
+        0) {
+      na.color <- NULL
+    }
+    if (type != "numeric" && !missing(bins)) 
+      warning("'bins' is ignored because the palette type is not numeric")
+    if (type == "numeric") {
+      cuts <- if (length(bins) == 1) 
+        pretty(values, bins)
+      else bins   
+      if (length(bins) > 2) 
+        if (!all(abs(diff(bins, differences = 2)) <= 
+                 sqrt(.Machine$double.eps))) 
+          stop("The vector of breaks 'bins' must be equally spaced")
+      n <- length(cuts)
+      r <- range(values, na.rm = TRUE)
+      cuts <- cuts[cuts >= r[1] & cuts <= r[2]]
+      n <- length(cuts)
+      p <- (cuts - r[1])/(r[2] - r[1])
+      extra <- list(p_1 = p[1], p_n = p[n])
+      p <- c("", paste0(100 * p, "%"), "")
+      if (decreasing == TRUE){
+        colors <- pal(rev(c(r[1], cuts, r[2])))
+        labels <- rev(labFormat(type = "numeric", cuts))
+      }else{
+        colors <- pal(c(r[1], cuts, r[2]))
+        labels <- rev(labFormat(type = "numeric", cuts))
+      }
+      colors <- paste(colors, p, sep = " ", collapse = ", ")
+    }
+    else if (type == "bin") {
+      cuts <- args$bins
+      n <- length(cuts)
+      mids <- (cuts[-1] + cuts[-n])/2
+      if (decreasing == TRUE){
+        colors <- pal(rev(mids))
+        labels <- rev(labFormat(type = "bin", cuts))
+      }else{
+        colors <- pal(mids)
+        labels <- labFormat(type = "bin", cuts)
+      }
+    }
+    else if (type == "quantile") {
+      p <- args$probs
+      n <- length(p)
+      cuts <- quantile(values, probs = p, na.rm = TRUE)
+      mids <- quantile(values, probs = (p[-1] + p[-n])/2, na.rm = TRUE)
+      if (decreasing == TRUE){
+        colors <- pal(rev(mids))
+        labels <- rev(labFormat(type = "quantile", cuts, p))
+      }else{
+        colors <- pal(mids)
+        labels <- labFormat(type = "quantile", cuts, p)
+      }
+    }
+    else if (type == "factor") {
+      v <- sort(unique(na.omit(values)))
+      colors <- pal(v)
+      labels <- labFormat(type = "factor", v)
+      if (decreasing == TRUE){
+        colors <- pal(rev(v))
+        labels <- rev(labFormat(type = "factor", v))
+      }else{
+        colors <- pal(v)
+        labels <- labFormat(type = "factor", v)
+      }
+    }
+    else stop("Palette function not supported")
+    if (!any(is.na(values))) 
+      na.color <- NULL
+  }
+  else {
+    if (length(colors) != length(labels)) 
+      stop("'colors' and 'labels' must be of the same length")
+  }
+  legend <- list(colors = I(unname(colors)), labels = I(unname(labels)), 
+                 na_color = na.color, na_label = na.label, opacity = opacity, 
+                 position = position, type = type, title = title, extra = extra, 
+                 layerId = layerId, className = className, group = group)
+  invokeMethod(map, data, "addLegend", legend)
+}
+
+#reverse the order
+
+multtract %>%
+  leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(color = ~pal3(estimate), stroke = FALSE,
+              fillOpacity = 0.85, popup = popup) %>%
+  addLegend_decreasing(position = "bottomright", pal = pal3,
+                       values = multtract$estimate, opacity = 1,
+                       title = "Median rent ($)",
+                       decreasing = TRUE)
+```
+
+
+
+### Problem 4: Your Turn!
+
+
+a. Using the `pdxTrees` dataset, create two `leaflet` maps.  I want you to get creative and really dig into the functionalities of `leaflet`.  Consider
+
+* Focusing on a specific park or set of parks.
+* Potentially using special icons.
+* Including labels and/or pop-ups.
+* The best tiling for your purpose.
+* Zoom or view constraints
+
+
+```{r}
+#Map 1
+
+parks <- get_pdxTrees_parks()
+
+unique(parks$Functional_Type)
+
+mttabor <- parks %>%
+  filter(Park == "Mt Tabor Park")  %>%
+  mutate(ft2 = case_when(
+    Functional_Type == "BD" ~ "broadleaf deciduous",
+    Functional_Type == "BE" ~ "broadleaf evergreen",
+    Functional_Type == "CD" ~ "conifer deciduous",
+    Functional_Type == "CE" ~ "conifer evergreen"
+  ))
+
+broadleaf <- mttabor %>%
+  filter(Functional_Type %in% c("BD", "BE"))
+
+broadleaf_icon <- makeIcon(
+  iconUrl = "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/120/joypixels/275/deciduous-tree_1f333.png",
+  iconWidth = 10, iconHeight = 20)
+
+conifer <- mttabor %>%
+  filter(Functional_Type %in% c("CD", "CE"))
+
+conifer_icon <- makeIcon(
+  iconUrl = "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/120/joypixels/275/evergreen-tree_1f332.png",
+  iconWidth = 10, iconHeight = 20)
+
+popup1 <- paste("<b>", broadleaf$Common_Name, 
+                "</b></br><i>", broadleaf$Scientific_Name, 
+                "</i>, family", broadleaf$Family,
+                "</br>", "DBH:", broadleaf$DBH, "inches",
+                "</br>", "Height:", broadleaf$Tree_Height, "feet",
+                "</br>", "Annual carbon sequestration:", broadleaf$Carbon_Sequestration_lb, "pounds",
+                "</br>", "Annual stormwater interception:", broadleaf$Stormwater_ft, "cubic feet",
+                "</br>", "Annual pollution removal:", broadleaf$Pollution_Removal_oz, "ounces")
+
+popup2 <- paste("<b>", conifer$Common_Name, 
+                "</b></br><i>", conifer$Scientific_Name, 
+                "</i>, family", conifer$Family,
+                "</br>", "DBH:", conifer$DBH, "inches",
+                "</br>", "Height:", conifer$Tree_Height, "feet",
+                "</br>", "Annual carbon sequestration:", conifer$Carbon_Sequestration_lb, "pounds",
+                "</br>", "Annual stormwater interception:", conifer$Stormwater_ft, "cubic feet",
+                "</br>", "Annual pollution removal:", conifer$Pollution_Removal_oz, "ounces")
+
+leaflet(options = leafletOptions(minZoom = 12, maxZoom = 19)) %>%
+  setView(lng = -122.594848, lat = 45.511, zoom = 15) %>% 
+  setMaxBounds(lat1 = 45.55, lng1 = -122.50, lat2 = 45.47, lng2 = -122.68) %>%
+  addProviderTiles(providers$CartoDB.Voyager) %>%
+  addMarkers(lng = ~Longitude, lat = ~Latitude,
+             data = broadleaf, icon = broadleaf_icon,
+             popup = popup1) %>%
+  addMarkers(lng = ~Longitude, lat = ~Latitude,
+             data = conifer, icon = conifer_icon,
+             popup = popup2)
+```
+
+
+```{r}
+#Map 2
+
+near_reed <- filter(parks, Park %in% c("Crystal Springs Rhododendron Garden",
+                                       "Kenilworth Park", 
+                                       "Eastmoreland Garden",
+                                       "Berkeley Park"))
+
+near_reed_bl <- near_reed %>%
+  filter(Functional_Type %in% c("BD", "BE"))
+
+popup3 <- paste("<b>", near_reed_bl$Common_Name, 
+                "</b></br><i>", near_reed_bl$Scientific_Name, 
+                "</i>, family", near_reed_bl$Family,
+                "</br>", "DBH:", near_reed_bl$DBH, "inches",
+                "</br>", "Height:", near_reed_bl$Tree_Height, "feet",
+                "</br>", "Annual carbon sequestration value: $", near_reed_bl$Carbon_Sequestration_value,
+                "</br>", "Annual stormwater interception value: $", near_reed_bl$Stormwater_value,
+                "</br>", "Annual pollution removal value: $", near_reed_bl$Pollution_Removal_value)
+
+near_reed_con <- near_reed %>%
+  filter(Functional_Type %in% c("CD", "CE"))
+
+popup4 <- paste("<b>", near_reed_con$Common_Name, 
+                "</b></br><i>", near_reed_con$Scientific_Name, 
+                "</i>, family", near_reed_con$Family,
+                "</br>", "DBH:", near_reed_con$DBH, "inches",
+                "</br>", "Height:", near_reed_con$Tree_Height, "feet",
+                "</br>", "Annual carbon sequestration value: $", near_reed_bl$Carbon_Sequestration_value,
+                "</br>", "Annual stormwater interception value: $", near_reed_bl$Stormwater_value,
+                "</br>", "Annual pollution removal value: $", near_reed_bl$Pollution_Removal_value)
+
+near_reed %>%
+  group_by(Park) %>%
+  summarize(sum(Carbon_Sequestration_value, na.rm = TRUE),
+            sum(Stormwater_value, na.rm = TRUE),
+            sum(Pollution_Removal_value, na.rm = TRUE))
+
+park_markers <- data.frame(name = c("Crystal Springs Rhododendron Garden",
+                                    "Kenilworth Park", 
+                                    "Eastmoreland Garden",
+                                    "Berkeley Park"),
+                           lat = c(45.477932, 45.491347,
+                                   45.474034, 45.473294),
+                           long = c(-122.637821, -122.631206,
+                                    -122.636110, -122.624426),
+                           carbon = c("469", "473", "6.65", "383"),
+                           water = c("991", "1,270", "12.20", "756"),
+                           pollution = c("1,800", "2,307", "22.20", "1,373"))
+
+pop5 <- paste("<b>", park_markers$name,
+              "</b></br>", "Park total annual carbon sequestration value: $",
+              park_markers$carbon, "</br>",
+              "Park total annual stormwater interception value: $",
+              park_markers$water, "</br>",
+              "Park total annual pollution removal value: $", 
+              park_markers$pollution)
+
+leaflet(options = leafletOptions(minZoom = 12, maxZoom = 18)) %>% 
+  setView(lng = -122.63, lat = 45.4817, zoom = 14) %>% 
+  setMaxBounds(lat1 = 45.5027, lng1 = -122.58, lat2 = 45.4607, lng2 = -122.68) %>%
+  addProviderTiles(providers$Esri.WorldStreetMap) %>%
+  addMarkers(lng = ~Longitude, lat = ~Latitude, 
+             data = near_reed_bl, icon = broadleaf_icon,
+             popup = popup3) %>%
+  addMarkers(lng = ~Longitude, lat = ~Latitude, 
+             data = near_reed_con, icon = conifer_icon,
+             popup = popup4) %>%
+  addMarkers(lng = ~long, lat = ~lat,
+             data = park_markers, popup = pop5)
+```
