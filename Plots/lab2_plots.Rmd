@@ -1,0 +1,486 @@
+---
+title: "Plotting"
+author: "Lauren"
+date: "5/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+## Goals of this lab
+
+1. Practice creating and refining graphs with `ggplot2`.
+1. Consider the strengths and weaknesses of various `geom`s and `aes`thetics for telling a data story.
+
+
+```{r}
+#Load libraries
+library(tidyverse)
+library(ggrepel)
+library(lubridate)
+library(ggthemes)
+library(ggimage)
+library(here)
+```
+
+
+
+### Problem 3: Imitation is the Sincerest Form of Flattery
+
+For this problem, I want you to try to recreate a FiveThirtyEight.com graphic.  Awesomely, they share their data with the world [here](https://data.fivethirtyeight.com/).  (Note: You don't need to recreate all their branding/background color scheme.)
+
+
+```{r, out.width="100%", echo=FALSE}
+knitr::include_graphics(here("Plots/covidgraph.PNG"))
+```
+
+
+b. Load the data and recreate the graph as best as you can.  
+
+```{r}
+covid <- read_csv(here("Plots/covid_concern_toplines.csv"))
+covid_points <- read_csv(here("Plots/covid_concern_polls_adjusted.csv"))
+
+
+infect <- covid %>%
+  filter(subject == "concern-infected")
+
+infect_points <- covid_points %>%
+  filter(subject == "concern-infected")
+```
+
+```{r, fig.width = 8, fig.height = 4, fig.retina = 3, out.width='100%'}
+ggplot(infect_points, aes(x = mdy(enddate))) +
+#cover up parts of the grid we don't want
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  annotate("rect",
+           xmin = ymd("2020/2/16"), xmax = ymd("2021/1/20"),
+           ymin = 50.1, ymax = 61, fill = "white") +
+  annotate("rect",
+           xmin = ymd("2021/1/20"), xmax = ymd("2021/3/22"),
+           ymin = 0, ymax = 61, fill = "white") +
+#add points
+  geom_point(aes(y = very_adjusted), 
+             color = "tomato", alpha = 0.15) +
+  geom_point(aes(y = somewhat_adjusted), 
+             color = "lightsalmon", alpha = 0.15) +
+  geom_point(aes(y = not_very_adjusted), 
+             color = "thistle3", alpha = 0.15) +
+  geom_point(aes(y = not_at_all_adjusted), 
+             color = "mediumorchid3", alpha = 0.15) +
+#add lines
+  geom_line(data = infect, inherit.aes = FALSE,
+            aes(x = mdy(modeldate), y = very_estimate), 
+            color = "tomato", size = 1.2) +
+  geom_line(data = infect, inherit.aes = FALSE,
+            aes(x = mdy(modeldate), y = somewhat_estimate), 
+            color = "lightsalmon", size = 1.2) +
+  geom_line(data = infect, inherit.aes = FALSE,
+            aes(x = mdy(modeldate), y = not_very_estimate), 
+            color = "thistle3", size = 1.2) +
+  geom_line(data = infect, inherit.aes = FALSE,
+            aes(x = mdy(modeldate), y = not_at_all_estimate), 
+            color = "mediumorchid3", size = 1.2) +
+#change axis breaks & labels
+  scale_x_date(name = NULL, #date_breaks = "1 month",
+               breaks = c(ymd("2020/3/1"), ymd("2020/4/1"), ymd("2020/5/1"),
+                          ymd("2020/6/1"), ymd("2020/7/1"), ymd("2020/8/1"),
+                          ymd("2020/9/1"), ymd("2020/10/1"), ymd("2020/11/1"),
+                          ymd("2020/12/1"), ymd("2021/1/1")),
+               minor_breaks = NULL,
+               labels = c("3/1/20", "4/1", "5/1", "6/1", 
+                          "7/1", "8/1", "9/1", "10/1", 
+                          "11/1", "12/1", "1/1/21"),
+               limits = c(ymd("2020/2/16"), ymd("2021/3/22")),
+               expand = c(0, 0)) +
+  scale_y_continuous(name = NULL, 
+                     breaks = c(0, 25, 50),
+                     labels = c("0", "25", "50%"),
+                     minor_breaks = NULL,
+                     limits = c(0, 61),
+                     expand = c(0, 0)) +
+#add context lines & labels
+  annotate("segment", 
+           x = ymd("2020/2/29"), xend = ymd("2020/2/29"),      #first reported US death
+           y = 0, yend = 50, 
+           linetype = "dashed", color = "grey20") +
+  annotate("text", x = ymd("2020/2/29"), y = 54.5, 
+           label = "First U.S. \ndeath \nreported",
+           color = "black", size = 2.5,
+           fontface = "italic") +
+  annotate("segment", 
+           x = ymd("2020/4/6"), xend = ymd("2020/4/6"),       #US deaths surpass 10,000
+           y = 0, yend = 50, 
+           linetype = "dashed", color = "grey20") +
+  annotate("text", x = ymd("2020/4/6"), y = 54.5, 
+           label = "U.S. deaths \nsurpass \n10,000",
+           color = "black", size = 2.5,
+           fontface = "italic") +
+  annotate("segment",
+           x = ymd("2020/5/28"), xend = ymd("2020/5/28"),     #US deaths surpass 100,000
+           y = 0, yend = 50, 
+           linetype = "dashed", color = "grey20") +
+  annotate("text", x = ymd("2020/5/28"), y = 54.5, 
+           label = "U.S. deaths \nsurpass \n100,000",
+           color = "black", size = 2.5,
+           fontface = "italic") +
+  annotate("segment",
+           x = ymd("2020/10/2"), xend = ymd("2020/10/2"),     #Trump gets covid
+           y = 0, yend = 50,
+           linetype = "dashed", color = "grey20") +
+  annotate("text", x = ymd("2020/10/2"), y = 56,                   
+           label = "Trump \ndiagnosed \nwith \nCOVID-19",
+           color = "black", size = 2.5,
+           fontface = "italic") +
+  annotate("segment",
+           x = ymd("2020/2/16"), xend = ymd("2021/1/20"),
+           y = 0, yend = 0, size = 0.2) +
+#label percentages
+  annotate("segment",
+           x = ymd("2021/1/20"), xend = ymd("2021/1/20"),
+           y = 0, yend = 50,
+           linetype = "dashed", color = "grey") +
+  annotate("text", x = ymd("2021-2-19"), y = 48,
+           label = "JAN. 20, 2021", color = "grey",
+           size = 3.5, family = "mono") +
+  annotate("text", x = ymd("2021-2-10"), y = 32,
+           label = "33.0% Very", color = "tomato", 
+           size = 3.5, fontface = "bold") +
+  annotate("text", x = ymd("2021-2-20"), y = 36,
+           label = "33.3% Somewhat", color = "lightsalmon", 
+           size = 3.5, fontface = "bold") +
+  annotate("text", x = ymd("2021-2-17"), y = 17,
+           label = "16.0% Not very", color = "thistle3", 
+           size = 3.5, fontface = "bold") +
+  annotate("text", x = ymd("2021-2-18"), y = 13,
+           label = "13.2% Not at all", color = "mediumorchid3", 
+           size = 3.5, fontface = "bold") +
+  labs(title = "How worried are Americans about infection?",
+       subtitle = "How concerned Americans say they are that they, someone in their family or someone else they know will\nbecome infected with the coronavirus")
+```
+
+c. Now make the graph better somehow.
+
+
+```{r, fig.width = 8, fig.height = 4, fig.retina = 3, out.width='100%'}
+#import images :) <3
+
+bernie <- data.frame(x = ymd("2021/1/19"),
+                     y = 55.5, 
+                     pic = here("Plots/bernie.png"))
+
+ggplot(infect_points, aes(x = mdy(enddate))) +
+#cover up parts of the grid we don't want
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  annotate("rect",
+           xmin = ymd("2020/2/16"), xmax = ymd("2021/1/20"),
+           ymin = 50.1, ymax = 61, fill = "white") +
+  annotate("rect",
+           xmin = ymd("2021/1/20"), xmax = ymd("2021/3/22"),
+           ymin = 0, ymax = 61, fill = "white") +
+#add points
+  geom_point(aes(y = very_adjusted), 
+             color = "tomato", alpha = 0.15) +
+  geom_point(aes(y = somewhat_adjusted), 
+             color = "lightsalmon", alpha = 0.15) +
+  geom_point(aes(y = not_very_adjusted), 
+             color = "thistle3", alpha = 0.15) +
+  geom_point(aes(y = not_at_all_adjusted), 
+             color = "mediumorchid3", alpha = 0.15) +
+#add lines
+  geom_line(data = infect, inherit.aes = FALSE,
+            aes(x = mdy(modeldate), y = very_estimate), 
+            color = "tomato", size = 1.2) +
+  geom_line(data = infect, inherit.aes = FALSE,
+            aes(x = mdy(modeldate), y = somewhat_estimate), 
+            color = "lightsalmon", size = 1.2) +
+  geom_line(data = infect, inherit.aes = FALSE,
+            aes(x = mdy(modeldate), y = not_very_estimate), 
+            color = "thistle3", size = 1.2) +
+  geom_line(data = infect, inherit.aes = FALSE,
+            aes(x = mdy(modeldate), y = not_at_all_estimate), 
+            color = "mediumorchid3", size = 1.2) +
+#change axis breaks & labels
+  scale_x_date(name = NULL, #date_breaks = "1 month",
+               breaks = c(ymd("2020/3/1"), ymd("2020/4/1"), ymd("2020/5/1"),
+                          ymd("2020/6/1"), ymd("2020/7/1"), ymd("2020/8/1"),
+                          ymd("2020/9/1"), ymd("2020/10/1"), ymd("2020/11/1"),
+                          ymd("2020/12/1"), ymd("2021/1/1")),
+               minor_breaks = NULL,
+               labels = c("3/1/20", "4/1", "5/1", "6/1", 
+                          "7/1", "8/1", "9/1", "10/1", 
+                          "11/1", "12/1", "1/1/21"),
+               limits = c(ymd("2020/2/16"), ymd("2021/3/22")),
+               expand = c(0, 0)) +
+  scale_y_continuous(name = NULL, 
+                     breaks = c(0, 25, 50),
+                     labels = c("0", "25", "50%"),
+                     minor_breaks = NULL,
+                     limits = c(0, 61),
+                     expand = c(0, 0)) +
+#add context lines & labels
+  annotate("segment", 
+           x = ymd("2020/2/29"), xend = ymd("2020/2/29"),      #first reported US death
+           y = 0, yend = 50, 
+           linetype = "dashed", color = "grey20") +
+  annotate("text", x = ymd("2020/2/29"), y = 54.5, 
+           label = "First U.S. \ndeath \nreported",
+           color = "black", size = 2.5,
+           fontface = "italic") +
+  annotate("segment", 
+           x = ymd("2020/4/6"), xend = ymd("2020/4/6"),       #US deaths surpass 10,000
+           y = 0, yend = 50, 
+           linetype = "dashed", color = "grey20") +
+  annotate("text", x = ymd("2020/4/6"), y = 54.5, 
+           label = "U.S. deaths \nsurpass \n10,000",
+           color = "black", size = 2.5,
+           fontface = "italic") +
+  annotate("segment",
+           x = ymd("2020/5/28"), xend = ymd("2020/5/28"),     #US deaths surpass 100,000
+           y = 0, yend = 50, 
+           linetype = "dashed", color = "grey20") +
+  annotate("text", x = ymd("2020/5/28"), y = 54.5, 
+           label = "U.S. deaths \nsurpass \n100,000",
+           color = "black", size = 2.5,
+           fontface = "italic") +
+  annotate("segment",
+           x = ymd("2020/10/2"), xend = ymd("2020/10/2"),     #Trump gets covid
+           y = 0, yend = 50,
+           linetype = "dashed", color = "grey20") +
+  annotate("text", x = ymd("2020/10/2"), y = 56,                   
+           label = "Trump \ndiagnosed \nwith \nCOVID-19",
+           color = "black", size = 2.5,
+           fontface = "italic") +
+  annotate("segment",
+           x = ymd("2020/11/26"), xend = ymd("2020/11/26"),   #Thanksgiving
+           y = 0, yend = 50,
+           linetype = "dashed", color = "grey20") +
+  annotate("text", x = ymd("2020/11/26"), y = 52,
+           label = "Thanksgiving",
+           color = "black", size = 2.5,
+           fontface = "italic") +
+  annotate("segment",
+           x = ymd("2020/2/16"), xend = ymd("2021/1/20"),     #y=0 line
+           y = 0, yend = 0, size = 0.2) +
+#label percentages
+  annotate("segment",
+           x = ymd("2021/1/20"), xend = ymd("2021/1/20"),     #inauguration line
+           y = 0, yend = 50,
+           linetype = "dashed", color = "grey") +
+  annotate("text", x = ymd("2021-2-19"), y = 48,
+           label = "JAN. 20, 2021", color = "grey45",
+           size = 3.5, family = "mono") +
+  annotate("text", x = ymd("2021-2-19"), y = 45.5,
+           label = "INAUGURATION DAY", color = "grey45",
+           size = 2.6, family = "mono") +
+  geom_image(data = bernie,                                    #bernie
+             mapping = aes(image = pic, 
+                           x = ymd(x), 
+                           y = as.numeric(y)),
+             inherit.aes = FALSE, 
+             size = .05, asp = 2.1) +
+  annotate("text", x = ymd("2021-2-10"), y = 32,
+           label = "33.0% Very", color = "tomato", 
+           size = 3.5, fontface = "bold") +
+  annotate("text", x = ymd("2021-2-20"), y = 36,
+           label = "33.3% Somewhat", color = "lightsalmon", 
+           size = 3.5, fontface = "bold") +
+  annotate("text", x = ymd("2021-2-17"), y = 17,
+           label = "16.0% Not very", color = "thistle3", 
+           size = 3.5, fontface = "bold") +
+  annotate("text", x = ymd("2021-2-18"), y = 13,
+           label = "13.2% Not at all", color = "mediumorchid3", 
+           size = 3.5, fontface = "bold") +
+  labs(title = "How worried are Americans about covid infection?",
+       subtitle = "How concerned Americans say they are that they, someone in their family or someone else they know will\nbecome infected with the coronavirus")
+```
+
+I was really irritated when I was first looking at this graph that they didn't indicate what the little bump in early December was about. They put on some important covid "milestones" if you will, but didn't really add anything to "explain" the data. So I went searching around on the internet of what happened in early December--was it the vaccine announcement? New covid strain? Turns out nothing actually really happened around that time (covid-related), but it is consipicuously timed in relation to Thanksgiving, when public health officials were begging people to stay home and keep holiday gatherings to immediate household members only. The travel data told us that is *not* what people did--so it makes sense that about a week or two after Thanksgiving, there might be more people worried about infection (whether or not they had traveled, people they interact with at the store or at work may have!). We don't see a similar bump after Christmas, however, which we know had even more travel, so this is probably not the whole story.
+
+Also, the dataset just happened to end on January 20th, so it was just a perfect excuse to remind people what happened on that day, even if it wasn't covid-related. (That being the inauguration, of course, but also the iconic Bernie!)
+
+
+
+### Problem 5: One dataset, visualized multiple ways
+
+Create multiple visualizations of the same data from the `pdx_crash_2018` dataset.
+
+
+a. Pick 3 - 4 variables you want to explore.  Provide their code names.
+
+Weekday - `CRASH_WK_DAY_CD` // `wday`
+
+Time - `CRASH_HR_SHORT_DESC`
+
+Alcohol involved - `ALCHL_INVLV_FLG` // `alcohol`
+
+Severity - `CRASH_SVRTY_CD` // `severity`
+
+
+b. Create the graphs.
+
+```{r}
+#wrangling
+pdx_crash_2018 <- pdx_crash_2018 %>%
+  mutate(wday = case_when(
+    CRASH_WK_DAY_CD == 1 ~ "Sunday",
+    CRASH_WK_DAY_CD == 2 ~ "Monday",
+    CRASH_WK_DAY_CD == 3 ~ "Tuesday",
+    CRASH_WK_DAY_CD == 4 ~ "Wednesday",
+    CRASH_WK_DAY_CD == 5 ~ "Thursday",
+    CRASH_WK_DAY_CD == 6 ~ "Friday",
+    CRASH_WK_DAY_CD == 7 ~ "Saturday"))
+
+test <- pdx_crash_2018 %>%
+  select(CRASH_MO_NO, CRASH_DAY_NO, CRASH_YR_NO) %>%
+  mutate(month = as.numeric(CRASH_MO_NO),
+         day = as.numeric(CRASH_DAY_NO))
+
+smol_crash <- pdx_crash_2018 %>%
+  select(CRASH_YR_NO, CRASH_MO_NO, CRASH_DAY_NO, 
+         CRASH_WK_DAY_CD, wday, CRASH_HR_NO, 
+         CRASH_HR_SHORT_DESC, ALCHL_INVLV_FLG,
+         CRASH_SVRTY_CD) %>%
+  mutate(month = as.numeric(CRASH_MO_NO),
+         day = as.numeric(CRASH_DAY_NO),
+         date = make_datetime(CRASH_YR_NO, month, day),
+         alcohol = as.factor(ALCHL_INVLV_FLG),
+         severity = case_when(
+           CRASH_SVRTY_CD == 2 ~ "Fatal",
+           CRASH_SVRTY_CD == 4 ~ "Non-fatal injury",
+           CRASH_SVRTY_CD == 5 ~ "Property damage only"),
+         fatal = case_when(
+           CRASH_SVRTY_CD == 2 ~ "Fatal",
+           CRASH_SVRTY_CD != 2 ~ "Non-fatal"))
+
+fatal <- smol_crash %>%
+  filter(severity == "Fatal")
+
+injury <- smol_crash %>%
+  filter(severity == "Non-fatal injury")
+
+propdmg <- smol_crash %>%
+  filter(severity == "Property damage only")
+
+injury %>% count(alcohol)
+66/1479
+  
+```
+
+```{r}
+#plot 1
+smol_crash %>%
+  filter(CRASH_HR_NO < 24) %>%
+  count(wday, CRASH_HR_SHORT_DESC) %>%
+ggplot(aes(x = wday, y = CRASH_HR_SHORT_DESC, fill = n)) +
+  geom_tile() +
+  scale_x_discrete(name = "Day of week", 
+                   limits = c("Monday", "Tuesday", "Wednesday",
+                              "Thursday", "Friday", "Saturday",
+                              "Sunday")) +
+  scale_y_discrete(name = "Hour of day",
+                   limits = c("1A", "2A", "3A", "4A", "5A", "6A",
+                              "7A", "8A", "9A", "10A", "11A", "12P", "1P",
+                              "2P", "3P", "4P", "5P", "6P", "7P", "8P",
+                              "9P", "10P", "11P", "12A")) +
+  scale_fill_distiller(direction = 1, palette = "BuGn") +
+  theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), panel.background = element_blank()) +
+  labs(fill = "Crashes",
+       title = "Avoid driving 4-5pm on weekdays?",
+       subtitle = "Car crash time trends in Portland, 2018",
+       caption = "Oregon Dept. of Transportation, 2019")
+```
+
+```{r}
+#plot 3
+smol_crash %>%
+  filter(CRASH_HR_NO < 24) %>%
+ggplot(aes(x = wday, y = CRASH_HR_SHORT_DESC, 
+           color = alcohol)) +
+  geom_jitter(alpha = 0.5) +
+  scale_x_discrete(name = "Day of week", 
+                   limits = c("Monday", "Tuesday", "Wednesday",
+                              "Thursday", "Friday", "Saturday",
+                              "Sunday")) +
+  scale_y_discrete(name = "Hour of day",
+                   limits = c("6A", "7A", "8A", "9A", "10A", "11A", 
+                              "12P", "1P", "2P", "3P", "4P", "5P", 
+                              "6P", "7P", "8P", "9P", "10P", "11P",  
+                              "12A", "1A", "2A", "3A", "4A", "5A")) +
+  scale_color_discrete(name = "Involved\nalcohol",
+                       labels = c("No", "Yes")) +
+  theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), panel.background = element_blank()) +
+  labs(title = "Alcohol-related car crashes occur mostly at night",
+       subtitle = "Car crashes in Portland, 2018",
+       caption = "Oregon Dept. of Transportation, 2019")
+```
+
+```{r, fig.retina=3}
+#plot 4
+smol_crash %>%
+  filter(CRASH_HR_NO < 24) %>%
+ggplot(aes(x = wday, y = CRASH_HR_SHORT_DESC, 
+           color = fatal, shape = alcohol)) +
+  geom_jitter(alpha = 0.5, size = 2) +
+  scale_x_discrete(name = "Day of week", 
+                  limits = c("Monday", "Tuesday", "Wednesday",
+                             "Thursday", "Friday", "Saturday",
+                             "Sunday")) +
+  scale_y_discrete(name = "Time",
+                  limits = c("6A", "7A", "8A", "9A", "10A", "11A", 
+                             "12P", "1P", "2P", "3P", "4P", "5P", 
+                             "6P", "7P", "8P", "9P", "10P", "11P",  
+                             "12A", "1A", "2A", "3A", "4A", "5A")) +
+  scale_color_manual(name = "Severity",
+                     values = c("#000000", "#23C26F")) +
+  scale_shape_discrete(name = "Alcohol involved",
+                       labels = c("No", "Yes")) +
+  theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), panel.background = element_blank(),
+        axis.title.x = element_blank(), legend.position = "bottom",
+        legend.margin = unit(3, "mm")) +
+  labs(title = "50% of fatal car accidents involve alcohol",
+       subtitle = "Compared to less than 5% of non-fatal crashes",
+       caption = "2018 Portland Car Crashes, Source: Oregon Dept. of Transportation")
+```
+
+
+c. Pick your favorite graph from b and change at least four aspects of the `theme()`.
+
+```{r, fig.retina=3}
+#plot 4.1
+smol_crash %>%
+  filter(CRASH_HR_NO < 24) %>%
+ggplot(aes(x = wday, y = CRASH_HR_SHORT_DESC, 
+           color = fatal, shape = alcohol)) +
+  geom_jitter(alpha = 0.5, size = 2) +
+  scale_x_discrete(name = "Day of week", 
+                  limits = c("Monday", "Tuesday", "Wednesday",
+                             "Thursday", "Friday", "Saturday",
+                             "Sunday")) +
+  scale_y_discrete(name = "Time",
+                  limits = c("7A", "8A", "9A", "10A", "11A", "12P", "1P",
+                             "2P", "3P", "4P", "5P", "6P", "7P", "8P",
+                             "9P", "10P", "11P", "12A", "1A", "2A", 
+                             "3A", "4A", "5A", "6A")) +
+  scale_color_manual(name = "Severity",
+                     values = c("#000000", "#23C26F")) +
+  scale_shape_discrete(name = "Alcohol involved",
+                       labels = c("No", "Yes")) +
+  theme_bw() +
+  theme(legend.position = "bottom", axis.title.x = element_blank(),
+        legend.box = "vertical", legend.margin = unit(0, "mm")) +
+  labs(title = "50% of fatal car accidents involve alcohol",
+       subtitle = "Compared to less than 5% of non-fatal crashes",
+       caption = "2018 Portland Car Crashes, Source: Oregon Dept. of Transportation")
+```
+
