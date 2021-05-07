@@ -32,7 +32,7 @@ library(here)
 
 ### Problem 1: Mapping PDX Crashes
 
-For this problem we will return to the SE Portland 2018 car crash dataset.
+For this problem we will return to the SE Portland 2018 car crash dataset. (( ODOT Crash records for SE PDX, all road types, for Jan 1, 2018 - Dec 21, 2018. Downloaded from the ODOT Crash Data System 11/11/2019. Accessed from [ODOT](https://www.oregon.gov/ODOT/Data/Pages/Crash.aspx) ))
 
 ```{r}
 pdx_crash_2018 <- read_csv(here("Maps/pdx_crash_2018_page1.csv"))
