@@ -1,0 +1,133 @@
+---
+title: "leafpop"
+output: pdf_document
+---
+
+loading data and libraries
+
+```{r}
+library(tidyverse)
+library(leafpop)
+library(lubridate)
+library(leaflet)
+library(here)
+library(htmlwidgets)
+```
+
+```{r}
+damdata <- read_csv("Shiny dashboards/dams/damdata.csv") %>%
+  mutate(purpose = fct_relevel(purpose, c("Hydroelectricity",
+                                          "Irrigation",
+                                          "Irrigation & Hydroelectricity",
+                                          "Irrigation & Water supply")))
+
+damspat <- read_csv("Shiny dashboards/dams/damspats.csv") %>%
+  mutate(purpose = fct_relevel(purpose, c("Hydroelectricity",
+                                          "Irrigation",
+                                          "Irrigation & Hydroelectricity",
+                                          "Irrigation & Water supply")),
+         district = as_factor(district),
+         drought = as_factor(drought))
+```
+
+
+creating named titles
+
+```{r}
+damdata <- damdata %>%
+  mutate(lab = paste(reservoir_name, "dam water storage in 2019-2020"))
+```
+
+
+Starting leafpop graphs 
+
+```{r}
+grapher <- function(damname) {
+  damdata %>%
+  filter(date >= dmy(01012019),
+         reservoir_name == unique(damname)) %>%
+  ggplot(aes(x = date, y = storage_bcm)) +
+  geom_point(alpha = 0.8, 
+             fill = "#1BC0C2",
+             shape = 21,
+             size = 3) +
+  geom_line()+
+  labs(title = "Dam water storage in 2019-2020",
+       subtitle = paste(unique(damname), "Dam"),
+       y = "Storage (BCM)") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank())
+}
+
+
+maps <- map(unique(damspat$reservoir_name), grapher)
+
+```
+
+
+```{r}
+content <- paste("<b>", damspat$reservoir_name, "</b></br>",
+                 "River:", damspat$river, "</br>",
+                 "District", damspat$district, "</br>",
+                 "Purpose:", damspat$purpose, "</br>",
+                 "Effective storage capacity:", damspat$effective_storage_capacity_109m3, "BCM")
+
+
+leaflet(options = leafletOptions(minZoom = 3, maxZoom = 9)) %>%
+  addProviderTiles(providers$CartoDB.VoyagerLabelsUnder) %>%
+  setView(lat = 19.2, lng = 76.1, zoom = 7) %>%
+  setMaxBounds(lat1 = 10, lng1 = 62.2,
+               lat2 = 29, lng2 = 90.2) %>%
+  addCircleMarkers(data = damspat,
+                   lat = ~lat, lng = ~long,
+                   stroke = FALSE, fillOpacity = 0.65,
+                   radius = ~effective_storage_capacity_109m3*10,
+                   group = "dams",
+                   label = unique(damspat$reservoir_name)) %>%
+  addPopupGraphs(maps, group = "dams", width = 400, height = 300)
+
+```
+
+
+```{r}
+save(maps, file = here("Shiny dashboards/dams/popmaps.RData"))
+```
+
+
+trying to do multiple popups
+
+```{r}
+dampal <- colorFactor(palette = c("#564040", "#0033FF"),
+                      domain = damspat$drought)
+
+leaflet(options = leafletOptions(minZoom = 3, maxZoom = 9)) %>%
+  addProviderTiles(providers$CartoDB.VoyagerLabelsUnder) %>%
+  setView(lat = 19.2, lng = 76.1, zoom = 7) %>%
+  setMaxBounds(lat1 = 10, lng1 = 62.2,
+               lat2 = 29, lng2 = 90.2) %>%
+  addCircleMarkers(data = damspat,
+                   lat = ~lat, lng = ~long,
+                   stroke = FALSE, fillOpacity = 0.65,
+                   color = ~dampal(drought),
+                   radius = ~effective_storage_capacity_109m3*10,
+                   group = "Water.Depletion",
+                   label = unique(damspat$reservoir_name)) %>%
+  addPopupGraphs(maps, group = "Water.Depletion", width = 400, height = 300) %>%
+  addCircleMarkers(data = damspat,
+                   lat = ~lat, lng = ~long,
+                   stroke = FALSE, fillOpacity = 0.65,
+                   color = ~dampal(drought),
+                   radius = ~effective_storage_capacity_109m3*10,
+                   group = "Text.Info",
+                   label = unique(damspat$reservoir_name),
+                   popup = content) %>%
+  addLayersControl(baseGroups = c("Water.Depletion", "Text.Info"),
+                   options = layersControlOptions(collapsed = FALSE),
+                   position = "topright") %>%
+    htmlwidgets::onRender("
+        function() {
+            $('.leaflet-control-layers-list').prepend('<label style=\"text-align:center\"><u><b>Toggle Popups</b></u></label>');
+        }
+    ")
+```
+
