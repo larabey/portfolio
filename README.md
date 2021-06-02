@@ -2,4 +2,6 @@
 
 Sample snippets of my work :)
 
-Check out this dashboard I made with Aditya Gadkari: https://larabey.shinyapps.io/dams/
+Easy links to my dashboards: 
+Dams and Droughts in Maharashtra, India: https://larabey.shinyapps.io/dams/
+Plotting `palmerpenguins`: https://larabey.shinyapps.io/penguins/
